@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools"]
+
+[project]
+name = "image_sorter"
+authors = [
+    {name = "Luc", email = "lucifiel1618@gmail.com"},
+]
+description = "Image comparison and ordering"
+readme = "README.md"
+requires-python = ">=3.11"
+version = "1.0.0"
+
+dependencies = [
+    "pillow",
+    "opencv-python",
+    "scikit-image",
+    "imutils",
+    "imgutils"
+]
