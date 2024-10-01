@@ -16,5 +16,5 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-skimage = ["scikit-image", "opencv-python", "imutils"]
+opencv = ["opencv-python", "scikit-image", "imutils"]
 imgutils = ["dghs-imgutils"]
