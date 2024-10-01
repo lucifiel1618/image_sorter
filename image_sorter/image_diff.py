@@ -5,7 +5,6 @@ import argparse
 from typing import Callable, Optional, TypeAlias, TypedDict
 
 import numpy as np
-import imutils
 import skimage
 from PIL import Image, ImageOps
 from skimage.metrics import structural_similarity
@@ -43,6 +42,7 @@ def _SSIM(imageA: Image.Image, imageB: Image.Image, visualize=False) -> DiffResu
         pctArea = 1. - np.sum(thresh) / areaA
     if visualize:
         import cv2
+        import imutils
         # loop over the contours
         cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         cnts = imutils.grab_contours(cnts)
