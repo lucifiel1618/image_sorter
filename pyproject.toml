@@ -9,13 +9,12 @@ authors = [
 description = "Image comparison and ordering"
 readme = "README.md"
 requires-python = ">=3.11"
-version = "1.0.0"
+version = "2.0.0"
 
 dependencies = [
-    "pillow",
-    "scikit-image",
-    "imgutils"
+    "imageio"
 ]
 
 [project.optional-dependencies]
-opencv = ["opencv-python", "imutils"]
+skimage = ["scikit-image", "opencv-python", "imutils"]
+imgutils = ["imgutils"]

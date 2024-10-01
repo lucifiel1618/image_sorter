@@ -5,16 +5,15 @@ import argparse
 from typing import Callable, Optional, TypeAlias, TypedDict
 
 import numpy as np
-import skimage
 from PIL import Image, ImageOps
-from skimage.metrics import structural_similarity
+import imageio
 
 
-MatLike: TypeAlias = np.ndarray[tuple[int, int], np.dtype[np.float_ | np.int_]]
+MatLike: TypeAlias = np.ndarray[tuple[int, int, int, int], np.dtype[np.float_ | np.int_]]
 
 
 def get_image(f: str) -> Image.Image:
-    return Image.fromarray(skimage.io.imread(f))
+    return Image.fromarray(imageio.imread(f))
 
 
 class DiffResult(TypedDict):
@@ -24,6 +23,8 @@ class DiffResult(TypedDict):
 
 
 def _SSIM(imageA: Image.Image, imageB: Image.Image, visualize=False) -> DiffResult:
+    from skimage.metrics import structural_similarity
+
     # convert the images to grayscale
     grayA = ImageOps.grayscale(imageA)
     grayB = ImageOps.grayscale(imageB)
