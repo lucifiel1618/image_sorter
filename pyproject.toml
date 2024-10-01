@@ -13,8 +13,10 @@ version = "1.0.0"
 
 dependencies = [
     "pillow",
-    "opencv-python",
     "scikit-image",
     "imutils",
     "imgutils"
 ]
+
+[project.optional-dependencies]
+opencv = ["opencv-python"]

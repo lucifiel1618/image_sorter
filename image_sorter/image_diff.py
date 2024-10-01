@@ -2,19 +2,19 @@
 
 # import the necessary packages
 import argparse
-from typing import Callable, Optional, TypedDict
+from typing import Callable, Optional, TypeAlias, TypedDict
 
-import cv2
+import numpy as np
 import imutils
 import skimage
-from cv2.typing import MatLike
-from PIL import Image
+from PIL import Image, ImageOps
 from skimage.metrics import structural_similarity
 
-np = cv2.numpy
+
+MatLike: TypeAlias = np.ndarray[tuple[int, int], np.dtype[np.float_ | np.int_]]
 
 
-def get_image(f: str) -> MatLike:
+def get_image(f: str) -> Image.Image:
     return Image.fromarray(skimage.io.imread(f))
 
 
@@ -24,31 +24,28 @@ class DiffResult(TypedDict):
     pctArea: Optional[float]
 
 
-def _SSIM(imageA: MatLike, imageB: MatLike, visualize=False) -> DiffResult:
+def _SSIM(imageA: Image.Image, imageB: Image.Image, visualize=False) -> DiffResult:
     # convert the images to grayscale
-    grayA = cv2.cvtColor(imageA, cv2.COLOR_BGR2GRAY)
-    grayB = cv2.cvtColor(imageB, cv2.COLOR_BGR2GRAY)
+    grayA = ImageOps.grayscale(imageA)
+    grayB = ImageOps.grayscale(imageB)
 
-    areaA = grayA.shape[0] * grayA.shape[1]
+    areaA = grayA.width * grayA.height
     # compute the Structural Similarity Index (SSIM) between the two
     # images, ensuring that the difference image is returned
-    if grayA.shape != grayB.shape:
+    if grayA.size != grayB.size:
         (score, diff, pctArea) = 0, None, 0
     else:
-        (score, diff) = structural_similarity(grayA, grayB, full=True)
+        score, diff = structural_similarity(grayA, grayB, full=True)
         diff = (diff * 255).astype("uint8")
-    # print("SSIM: {}".format(score))
 
-    # threshold the difference image, followed by finding contours to
-    # obtain the regions of the two input images that differ
-        thresh = cv2.threshold(diff, 0, 255,
-                               cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
-        cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,
-                                cv2.CHAIN_APPROX_SIMPLE)
-        cnts = imutils.grab_contours(cnts)
-        pctArea = 1 - sum(cv2.contourArea(cnt) for cnt in cnts) / areaA
+        # threshold the difference image
+        thresh = diff > np.percentile(diff, 99)
+        pctArea = 1. - np.sum(thresh) / areaA
     if visualize:
+        import cv2
         # loop over the contours
+        cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cnts = imutils.grab_contours(cnts)
         for c in cnts:
             # compute the bounding box of the contour and then draw the
             # bounding box on both input images to represent where the two
@@ -66,25 +63,27 @@ def _SSIM(imageA: MatLike, imageB: MatLike, visualize=False) -> DiffResult:
 
 
 def SSIM(imageA: str, imageB: str, visualize=False, **kwds) -> DiffResult:
-    return _SSIM(cv2.imread(imageA), cv2.imread(imageB), visualize=visualize)
+    return _SSIM(get_image(imageA), get_image(imageB), visualize=visualize)
 
 
-def _pixelwise(imageA: MatLike, imageB: MatLike, visualize=False, cutoff=None) -> DiffResult:
-    if imageA.shape != imageB.shape:
+def _pixelwise(imageA: Image.Image, imageB: Image.Image, visualize=False, cutoff=None) -> DiffResult:
+    if imageA.size != imageB.size:
         return {'diff': None, 'score': 0, 'pctArea': 0}
+    arr_imageA = np.asarray(imageA)
+    arr_imageB = np.asarray(imageB)
     if cutoff is None:
-        mask_diff = np.tensordot(cv2.absdiff(imageA, imageB), [1, 1, 1], axes=1)
+        mask_diff = np.tensordot(abs(arr_imageA - arr_imageB), [1, 1, 1], axes=1)
         score = pctArea = 1 - np.count_nonzero(mask_diff) / mask_diff.size
     else:
         size = imageA.size
-        length = imageA.shape[0]
+        length = imageA.size[0]
         stepsize = max(50, int(length * cutoff))
         Area = 0
         threshold = size * cutoff
         score = pctArea = 0.
         for r in (slice(i, i + stepsize) for i in range(0, length, stepsize)):
-            subimageA, subimageB = imageA[r], imageB[r]
-            mask_diff = np.tensordot(cv2.absdiff(subimageA, subimageB), [1, 1, 1], axes=1)
+            subimageA, subimageB = arr_imageA[r], arr_imageB[r]
+            mask_diff = np.tensordot(abs(subimageA - subimageB), [1, 1, 1], axes=1)
             Area += mask_diff.size - np.count_nonzero(mask_diff)
             if Area > threshold:
                 score = pctArea = 1.
@@ -93,12 +92,12 @@ def _pixelwise(imageA: MatLike, imageB: MatLike, visualize=False, cutoff=None) -
 
 
 def pixelwise(imageA: str, imageB: str, visualize=False, **kwds) -> DiffResult:
-    return _pixelwise(cv2.imread(imageA), cv2.imread(imageB), visualize=visualize, **kwds)
+    return _pixelwise(get_image(imageA), get_image(imageB), visualize=visualize, **kwds)
 
 
 class _CCIP:
 
-    _metric: Callable[[MatLike, MatLike], float] = lambda x, y: 0.
+    _metric: Callable[[Image.Image, Image.Image], float] = lambda x, y: 0.
 
     def __call__(self, imageA: str, imageB: str, visualize=False, **kwds) -> DiffResult:
         return self._firt_call(imageA, imageB, visualize, **kwds)
@@ -121,7 +120,7 @@ ccip = _CCIP()
 
 class _LPIPS:
 
-    _metric: Callable[[MatLike, MatLike], float] = lambda x, y: 0.
+    _metric: Callable[[Image.Image, Image.Image], float] = lambda x, y: 0.
 
     def __call__(self, imageA: str, imageB: str, visualize=False, **kwds) -> DiffResult:
         return self._firt_call(imageA, imageB, visualize, **kwds)
