@@ -9,7 +9,7 @@ from PIL import Image, ImageOps
 import imageio
 
 
-MatLike: TypeAlias = np.ndarray[tuple[int, int, int, int], np.dtype[np.float_ | np.int_]]
+MatLike: TypeAlias = np.ndarray[tuple[int, int, int, int], np.dtype[np.float64 | np.int_]]
 
 
 def get_image(f: str) -> Image.Image:
