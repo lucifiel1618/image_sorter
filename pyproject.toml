@@ -17,4 +17,4 @@ dependencies = [
 
 [project.optional-dependencies]
 opencv = ["opencv-python", "scikit-image", "imutils"]
-imgutils = ["dghs-imgutils"]
+imgutils = ["dghs-imgutils", "onnxruntime"]
