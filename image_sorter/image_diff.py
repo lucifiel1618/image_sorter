@@ -22,8 +22,15 @@ class DiffResult(TypedDict):
     pctArea: Optional[float]
 
 
-def _SSIM(imageA: Image.Image, imageB: Image.Image, visualize=False) -> DiffResult:
+def rescaled(image: Image.Image, image_ref: Image.Image) -> Image.Image:
+    return image.resize(image_ref.size)
+
+
+def _SSIM(imageA: Image.Image, imageB: Image.Image, visualize=False, autoscale=False) -> DiffResult:
     from skimage.metrics import structural_similarity
+
+    if autoscale:
+        imageB = rescaled(imageB, imageA)
 
     # convert the images to grayscale
     grayA = ImageOps.grayscale(imageA)
@@ -35,7 +42,7 @@ def _SSIM(imageA: Image.Image, imageB: Image.Image, visualize=False) -> DiffResu
     if grayA.size != grayB.size:
         (score, diff, pctArea) = 0, None, 0
     else:
-        score, diff = structural_similarity(grayA, grayB, full=True)
+        score, diff = structural_similarity(np.asarray(grayA), np.asarray(grayB), full=True)
         diff = (diff * 255).astype("uint8")
 
         # threshold the difference image
@@ -63,8 +70,8 @@ def _SSIM(imageA: Image.Image, imageB: Image.Image, visualize=False) -> DiffResu
     return {'diff': diff, 'score': score, 'pctArea': pctArea}
 
 
-def SSIM(imageA: str, imageB: str, visualize=False, **kwds) -> DiffResult:
-    return _SSIM(get_image(imageA), get_image(imageB), visualize=visualize)
+def SSIM(imageA: str, imageB: str, visualize=False, autoscale=False, **kwds) -> DiffResult:
+    return _SSIM(get_image(imageA), get_image(imageB), visualize=visualize, autoscale=autoscale)
 
 
 def _pixelwise(imageA: Image.Image, imageB: Image.Image, visualize=False, cutoff=None) -> DiffResult:
@@ -135,7 +142,11 @@ class _LPIPS:
 
     @classmethod
     def _call(cls, imageA: str, imageB: str, visualize=False, **kwds) -> DiffResult:
-        score = 1. - float(cls._metric(get_image(imageA), get_image(imageB)))
+        _imageA = get_image(imageA)
+        _imageB = get_image(imageB)
+        if kwds.get('autoscale', False):
+            _imageB = rescaled(_imageB, _imageA)
+        score = 1. - float(cls._metric(_imageA, _imageB))
         return {'diff': None, 'score': score, 'pctArea': None}
 
 

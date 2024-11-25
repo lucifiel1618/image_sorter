@@ -5,8 +5,8 @@ import concurrent.futures
 from pathlib import Path
 import mimetypes
 from itertools import groupby
-from functools import cache, partial
-from typing import Callable, Iterable, Iterator, Literal, Optional, Sequence, TypeVar, TypedDict
+from functools import partial
+from typing import Any, Callable, Iterable, Iterator, Literal, Optional, Sequence, TypeVar, TypedDict
 import easy_logging
 from .image_diff import SSIM, DiffResult, pixelwise, ccip, lpips
 
@@ -44,7 +44,8 @@ def get_grouped(
     *compared: T,
     alg: Callable[[str, str], DiffResult] = pixelwise,
     threshold: float = 0.1,
-    key: Optional[Callable[[T], str]] = None
+    key: Optional[Callable[[T], str]] = None,
+    target: str = 'pctArea'
 ) -> list[T]:
 
     if len(compared) == 0:
@@ -59,7 +60,7 @@ def get_grouped(
 
     with concurrent.futures.ProcessPoolExecutor() as executor:
         results = executor.map(
-            partial(compare, compared=str(_original), alg=alg, target='pctArea', threshold=threshold),
+            partial(compare, compared=str(_original), alg=alg, target=target, threshold=threshold),
             map(str, _compared)
         )
         return [original, *(compared[i] for i, r in enumerate(results) if r)]
@@ -76,7 +77,7 @@ def _compare_groups_bruteforce(
     _group_a = group_a
     _groups_b = groups_b
     if key is not None:
-        _group_a = map(key, _group_a)
+        _group_a = list(map(key, _group_a))
         _groups_b = (map(key, _group_b) for _group_b in _groups_b)
 
     if alg is None:
@@ -192,14 +193,14 @@ def compare_groups(
 
 class ImageIndex(TypedDict):
     i: int
-    path: str | Path
+    path: Any
     primary: Optional[int]
     secondary: Optional[int]
 
 
 class ImageSorter:
     algs: dict[str, Callable[[str, str], DiffResult]] = {
-        'pixelwise': cache(pixelwise), 'SSIM': cache(SSIM), 'ccip': ccip, 'lpips': cache(lpips)
+        'pixelwise': pixelwise, 'SSIM': SSIM, 'ccip': ccip, 'lpips': lpips
     }
     thresholds: dict[str, float] = {
         'pixelwise': 0.1, 'SSIM': 0.8, 'ccip': 0., 'lpips': 0.55
@@ -207,11 +208,14 @@ class ImageSorter:
 
     def __init__(
         self,
-        images: Iterable[str | Path],
+        images: Iterable[T],
         alg: str = 'pixelwise',
         threshold: Optional[float] = None,
         kind: str = 'primary',
-        chunk: Optional[int] = None
+        chunk: Optional[int] = None,
+        target: str = 'pctArea',
+        *,
+        key: Optional[Callable[[T], str]] = None
     ):
         self.images: list[ImageIndex] = [
             ImageIndex(i=i, path=im, primary=None, secondary=None) for i, im in enumerate(images)
@@ -221,6 +225,8 @@ class ImageSorter:
         self.chunk = chunk
         self.threshold = threshold if threshold is not None else self.thresholds[alg]
         self.alg = partial(self.algs[alg], cutoff=None)
+        self.target = target
+        self.key = key if key is not None else lambda x: x
         self._classify()
 
     def _classify(self) -> None:
@@ -229,11 +235,12 @@ class ImageSorter:
         logger.info('Image classification start!')
         logger.info('Images are compared with {} chunk!'.format('{} per'.format(chunk) if chunk is not None else 'no'))
         while True:
+            remaining_images: list[ImageIndex]
             if is_first:
                 remaining_images = self.images
                 is_first = False
             else:
-                remaining_images = list(filter(lambda x: x['primary'] is None, remaining_images))
+                remaining_images = list(filter(lambda x: x['primary'] is None, remaining_images))  # type: ignore
             if (len(remaining_images) == 0):
                 break
             remaining_images_in_chunk = remaining_images[:chunk]
@@ -248,12 +255,13 @@ class ImageSorter:
                 *remaining_images_in_chunk,
                 alg=self.alg,
                 threshold=self.threshold,
-                key=lambda x: x['path']
+                key=lambda x: self.key(x['path']),
+                target=self.target
             )
             logger.info(
                 '{} images similar to "{}" are found.'.format(
                     len(similar_images) - 1,
-                    Path(remaining_images_in_chunk[0]['path']).relative_to('.')
+                    Path(self.key(remaining_images_in_chunk[0]['path'])).relative_to('.')
                 )
             )
 
@@ -290,19 +298,21 @@ class ImageSorter:
 
 
 def image_sorted(
-        images: Iterable[str | Path],
+        images: Iterable[T],
         alg: str = 'pixelwise',
         threshold: Optional[float] = None,
         kind: str = 'primary',
         ret_key: Callable[[ImageIndex], T] = lambda im: im['path'],
-        chunk: Optional[int] = None
+        chunk: Optional[int] = None,
+        target: str = 'pctArea'
 ) -> list[list[T]]:
     image_sorter = ImageSorter(
-        get_all_images(list(map(Path, images))),
+        images,
         alg=alg,
         threshold=threshold,
         kind=kind,
-        chunk=chunk
+        chunk=chunk,
+        target=target
     )
     return image_sorter.classified(ret_key=ret_key)
 
