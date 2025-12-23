@@ -8,8 +8,8 @@ authors = [
 ]
 description = "Image comparison and ordering"
 readme = "README.md"
-requires-python = ">=3.11"
-version = "2.1.0"
+requires-python = ">=3.13"
+version = "2.2.0"
 
 dependencies = [
     "imageio"
@@ -17,4 +17,4 @@ dependencies = [
 
 [project.optional-dependencies]
 opencv = ["opencv-python", "scikit-image", "imutils"]
-imgutils = ["dghs-imgutils", "onnxruntime"]
+imgutils = ["dghs-imgutils", "onnx", "onnxruntime"]
